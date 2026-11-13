@@ -1949,6 +1949,24 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = np.array([i * 0.1 for i in range(30)], dtype=np.float64)
         np.testing.assert_array_equal(np.array(result), expected)
 
+    def test_arange_integer_cpu_boundaries(self):
+        # These ranges fit as a sequence even when the next value or
+        # step does not fit in the requested integer dtype.
+        cases = (
+            (2147483646.0, 2147483648.0, 1.0, mx.int32, [2147483646, 2147483647]),
+            (-2147483647.0, -2147483649.0, -1.0, mx.int32, [-2147483647, -2147483648]),
+            (-2e9, 2e9, 3e9, mx.int32, [-2000000000, 1000000000]),
+            (-2147483648.0, 2147483648.0, 2147483648.0, mx.int32, [-2147483648, 0]),
+            (2147483648.0, 2147483651.0, 1.0, mx.int32, [2147483647] * 3),
+            (-2147483651.0, -2147483648.0, 1.0, mx.int32, [-2147483648] * 3),
+            (-1.0, 2.0, 1.0, mx.uint32, [0, 0, 0]),
+            (float(2**63), float(2**63 + 6144), 2048.0, mx.int64, [2**63 - 1] * 3),
+        )
+        for start, stop, step, dtype, expected in cases:
+            with self.subTest(dtype=str(dtype), start=start, stop=stop):
+                output = mx.arange(start, stop, step, dtype=dtype, stream=mx.cpu)
+                self.assertEqual(output.tolist(), expected)
+
     def test_arange_inferred_dtype(self):
         a = mx.arange(5)
         self.assertEqual(a.dtype, mx.int32)
