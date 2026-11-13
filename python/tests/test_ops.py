@@ -1920,6 +1920,35 @@ class TestOps(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.arange(0, 5, 0)
 
+    def test_arange_float_cpu_precision(self):
+        start = float(2**24 - 2)
+        for step in (1.0, -1.0):
+            result = mx.arange(
+                start, start + 8 * step, step, dtype=mx.float32, stream=mx.cpu
+            )
+            expected = np.array([start + step * i for i in range(8)], dtype=np.float32)
+            np.testing.assert_array_equal(np.array(result), expected)
+
+        for dtype, np_dtype in ((mx.float16, np.float16), (mx.float32, np.float32)):
+            result = mx.arange(0.0, 1.0, 0.1, dtype=dtype, stream=mx.cpu)
+            quantized_step = float(np_dtype(0.1))
+            expected = np.array([i * quantized_step for i in range(10)], dtype=np_dtype)
+            np.testing.assert_array_equal(np.array(result), expected)
+
+        # In float16 the step overflows, but index zero is still start.
+        result = mx.arange(0.0, 1e5, 7e4, dtype=mx.float16, stream=mx.cpu)
+        self.assertEqual(result.tolist(), [0.0, float("inf")])
+
+        # Keep separate multiply and add rounding, not a fused operation.
+        indices = (3, 6, 13, 15, 10000, 10005, 19991, 19993, 19996, 19998)
+        result = mx.arange(0.3, 14000.0, 0.7, dtype=mx.float64, stream=mx.cpu)
+        expected = np.array([0.3 + 0.7 * i for i in indices])
+        np.testing.assert_array_equal(np.array(result)[list(indices)], expected)
+
+        result = mx.arange(0.0, 3.0, 0.1, dtype=mx.float64, stream=mx.cpu)
+        expected = np.array([i * 0.1 for i in range(30)], dtype=np.float64)
+        np.testing.assert_array_equal(np.array(result), expected)
+
     def test_arange_inferred_dtype(self):
         a = mx.arange(5)
         self.assertEqual(a.dtype, mx.int32)
